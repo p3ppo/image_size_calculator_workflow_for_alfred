@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>bundleid</key>
+	<string>com.crawfordcurrie.image_size_calculator</string>
+	<key>category</key>
+	<string>Tools</string>
+	<key>connections</key>
+	<dict>
+		<key>7E912A59-DC92-4EBA-B86B-423F7F570684</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>9E8187EF-57EF-49AB-BE61-5BE446E7492B</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>CEE2DC7A-06C3-4744-8E14-0F295051B365</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>7E912A59-DC92-4EBA-B86B-423F7F570684</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+	</dict>
+	<key>createdby</key>
+	<string>Peter Crawford-Currie</string>
+	<key>description</key>
+	<string>Calculate new width and height of an image based on the original aspect ratio</string>
+	<key>disabled</key>
+	<false/>
+	<key>name</key>
+	<string>Image Size Calculator</string>
+	<key>objects</key>
+	<array>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<false/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>0</integer>
+				<key>escaping</key>
+				<integer>127</integer>
+				<key>keyword</key>
+				<string>imgr</string>
+				<key>queuedelaycustom</key>
+				<integer>1</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<false/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>Calculating...</string>
+				<key>script</key>
+				<string>&lt;?php
+
+//echo (PHP_VERSION);
+
+//$argv[1] = "800x600 50%";
+preg_match("/(\d+x\d+)/i", $argv[1], $width_height_input);
+//echo ("&lt;pre&gt;" . print_r($width_height_input, 1) . "&lt;/pre&gt;");
+preg_match("/ +(\d+%?)/i", $argv[1], $change_input);
+//echo ("&lt;pre&gt;" . print_r($change_input, 1) . "&lt;/pre&gt;");
+
+$json_output = '{
+  "skipknowledge": true,
+  "items": [
+    {
+        "uid": "invalid_command",
+        "title": "Keep typing...",
+        "subtitle": "Input format: [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
+        "arg": "",
+        "autocomplete": ""
+    }
+  ]}';
+$json_output_info = "";
+$json_output_change = "";
+
+// Check input, query e.g. "800x600 150%";
+if (count($width_height_input) &gt; 0) {
+  // A match was found for width and height.
+
+  // Extract the width and height from the first argument by splitting it on the "x" character.
+  $width_height = $width_height_input[1];
+  $width_height = explode("x", $width_height);
+
+  // Create an associative array to store the original width and height as integers.
+  $original_width_height = array("width" =&gt; (int)$width_height[0], "height" =&gt; (int)$width_height[1]);
+
+  $aspect_ratio = get_aspect_ratio($original_width_height['width'], $original_width_height['height']);
+
+  $json_output = '{
+    "skipknowledge": true,
+    "items": [
+    {
+      "uid": "aspect_ratio",
+      "title": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '",
+      "subtitle": "Aspect ratio",
+      "arg": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '"
+    }';
+
+  $json_output_info = ',
+    {
+      "uid": "invalid_command",
+      "title": "Keep typing...",
+      "subtitle": "Input format: [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
+      "arg": "",
+      "autocomplete": ""
+  }';
+
+  preg_match("/ +(\d+%?)/i", $argv[1], $change_input);
+  if (count($change_input) &gt; 0) {
+    $json_output_info = "";
+    // Get the second argument, which specifies how the image should be resized.
+    $change = $change_input[1];
+
+    // If the second argument contains a percentage sign, resize the image by a percentage.
+    if (strpos($change, "%") !== false) {
+      $change = (int)str_replace('%', '', $change);
+      $new_size = get_resized_size($original_width_height['width'], $original_width_height['height'], $change);
+    }
+    // Otherwise, resize the image to a specific height.
+    else {
+      $new_size = determine_new_height($original_width_height['width'], $original_width_height['height'], $change);
+    }
+
+    $json_output_change = ',
+      {
+          "uid": "width_and_height",
+          "title": "' . $new_size["width"] . 'x' . $new_size["height"] . '",
+          "subtitle": "New width and height",
+          "arg": "' . $new_size["width"] . 'x' . $new_size["height"] . '"
+      },
+      {
+        "uid": "width_and_height_html",
+        "title": "width=\"' . $new_size["width"] . 'px\" height=\"' . $new_size["height"] . 'px\"",
+        "subtitle": "New width and height in HTML",
+        "arg": "width=\"' . $new_size["width"] . '\" height=\"' . $new_size["height"] . '\""
+    },
+      {
+        "uid": "width",
+        "title": "' . $new_size["width"] . '",
+        "subtitle": "New width",
+        "arg": "' . $new_size["width"] . '"
+      },
+      {
+        "uid": "height",
+        "title": "' . $new_size["height"] . '",
+        "subtitle": "New height",
+        "arg": "' . $new_size["height"] . '"
+      }';
+  }
+  $json_output_change .= ']}';
+}
+
+echo ($json_output . $json_output_info . $json_output_change);
+
+/**
+ * Calculates the new height of an image based on the original width and height, and a new width.
+ *
+ * @param int $original_width The original width of the image.
+ * @param int $original_height The original height of the image.
+ * @param int $new_width The desired new width of the image.
+ * @return array An associative array containing the final width and height of the image.
+ */
+function determine_new_height($original_width, $original_height, $new_width)
+{
+  $final_width = (int)$new_width;
+  $final_height = (int)(($original_height / $original_width) * $new_width); // Calculate the new height based on the original aspect ratio and the new width.
+  return array("width" =&gt; $final_width, "height" =&gt; $final_height); // Return an associative array containing the final width and height of the image.
+}
+
+/**
+ * Calculates the new width and height of an image based on the original dimensions and a percentage to resize by.
+ *
+ * @param int $original_width The original width of the image.
+ * @param int $original_height The original height of the image.
+ * @param int $percent The percentage to resize the image by.
+ * @return array An associative array containing the final width and height of the image.
+ */
+function get_resized_size($original_width, $original_height, $percent)
+{
+  // Calculate the resize ratio based on the percentage.
+  $ratio = $percent / 100;
+
+  // Calculate the new width and height based on the resize ratio.
+  $new_width = $original_width * $ratio;
+  $new_height = $original_height * $ratio;
+
+  // Calculate the ratios between the new dimensions and the original dimensions.
+  $width_ratio = $new_width / $original_width;
+  $height_ratio = $new_height / $original_height;
+
+  // Choose the smaller of the two ratios to ensure that the image fits within the desired dimensions.
+  $final_ratio = min($width_ratio, $height_ratio);
+
+  // Calculate the final width and height based on the chosen ratio.
+  $final_width = (int)round($original_width * $final_ratio);
+  $final_height = (int)round($original_height * $final_ratio);
+
+  // Return an associative array containing the final width and height of the image.
+  return array("width" =&gt; $final_width, "height" =&gt; $final_height);
+}
+
+/**
+ * Calculates the aspect ratio of the a resolution, which is the ratio of its width to its height.
+ *
+ * @param int $width The width of the image.
+ * @param int $height The height of the image.
+ * @return array An associative array containing the final aspect ratio.
+ */
+function get_aspect_ratio($width, $height)
+{
+  // Use the gmp_gcd function to find the greatest common divisor of $width and $height
+  $divisor = gmp_intval(gmp_gcd($width, $height));
+
+  // Divide $width and $height by the greatest common divisor to get the reduced aspect ratio
+  //$aspectRatio = $width / $divisor . ':' . $height / $divisor;
+
+  // Return the reduced aspect ratio as an array
+  return array($width / $divisor, $height / $divisor);
+}
+</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string>test.sh</string>
+				<key>subtext</key>
+				<string>Input format: [width]x[height] [new width/change in percent]. E.g. 800x600 50%</string>
+				<key>title</key>
+				<string>Image Size Calculator</string>
+				<key>type</key>
+				<integer>1</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>CEE2DC7A-06C3-4744-8E14-0F295051B365</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>autopaste</key>
+				<false/>
+				<key>clipboardtext</key>
+				<string>{query}</string>
+				<key>ignoredynamicplaceholders</key>
+				<false/>
+				<key>transient</key>
+				<false/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.clipboard</string>
+			<key>uid</key>
+			<string>7E912A59-DC92-4EBA-B86B-423F7F570684</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>lastpathcomponent</key>
+				<false/>
+				<key>onlyshowifquerypopulated</key>
+				<true/>
+				<key>removeextension</key>
+				<false/>
+				<key>text</key>
+				<string>Copied to clipboard</string>
+				<key>title</key>
+				<string>{query}</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.notification</string>
+			<key>uid</key>
+			<string>9E8187EF-57EF-49AB-BE61-5BE446E7492B</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+	</array>
+	<key>readme</key>
+	<string></string>
+	<key>uidata</key>
+	<dict>
+		<key>7E912A59-DC92-4EBA-B86B-423F7F570684</key>
+		<dict>
+			<key>xpos</key>
+			<real>295</real>
+			<key>ypos</key>
+			<real>65</real>
+		</dict>
+		<key>9E8187EF-57EF-49AB-BE61-5BE446E7492B</key>
+		<dict>
+			<key>xpos</key>
+			<real>500</real>
+			<key>ypos</key>
+			<real>65</real>
+		</dict>
+		<key>CEE2DC7A-06C3-4744-8E14-0F295051B365</key>
+		<dict>
+			<key>xpos</key>
+			<real>85</real>
+			<key>ypos</key>
+			<real>65</real>
+		</dict>
+	</dict>
+	<key>userconfigurationconfig</key>
+	<array/>
+	<key>webaddress</key>
+	<string></string>
+</dict>
+</plist>
