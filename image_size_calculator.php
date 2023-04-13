@@ -2,11 +2,10 @@
 
 //echo (PHP_VERSION);
 
-//$argv[1] = "800x600 50%";
-preg_match("/(\d+x\d+)/i", $argv[1], $width_height_input);
-//echo ("<pre>" . print_r($width_height_input, 1) . "</pre>");
-preg_match("/ +(\d+%?)/i", $argv[1], $change_input);
-//echo ("<pre>" . print_r($change_input, 1) . "</pre>");
+//$argv[1] = '800x600';
+//$argv[1] = '800x600 50%';
+//$argv[1] = 'width: 800px; height: 600px; 50%';
+//$argv[1] = 'width="800px" height="600px" 50%';
 
 $json_output = '{
   "skipknowledge": true,
@@ -22,83 +21,123 @@ $json_output = '{
 $json_output_info = "";
 $json_output_change = "";
 
-// Check input, query e.g. "800x600 150%";
-if (count($width_height_input) > 0) {
-  // A match was found for width and height.
+if (isset($argv)) {
+  $width_height_input = array();
+  $change_input = array();
 
-  // Extract the width and height from the first argument by splitting it on the "x" character.
-  $width_height = $width_height_input[1];
-  $width_height = explode("x", $width_height);
+  // Default input, e.g. 800x600 50%
+  if (preg_match("/(\d+)x(\d+)/i", $argv[1], $match_resolution_results)) {
+    $width_height_input = array(
+      $match_resolution_results[1],
+      $match_resolution_results[2]
+    );
+    if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
+      $change_input = array($match_change_results[1]);
+    }
+  } else if (preg_match_all('/(width: *(\d+)px;)(\t|\n|\r| *)(height: *(\d+)px;)/', $argv[1], $match_resolution_results)) {
+    // CSS input, e.g. width: 800px; height: 600px; 50%
+    $width_height_input = array(
+      $match_resolution_results[2][0],
+      $match_resolution_results[5][0]
+    );
+    if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
+      $change_input = array($match_change_results[3]);
+    }
+  } else if (preg_match_all('/(width="(\d+)px")(\t|\n|\r| *)(height="(\d+)px")/', $argv[1], $match_resolution_results)) {
+    // HTML input, e.g. width="800px" height="600px" 50%
+    $width_height_input = array(
+      $match_resolution_results[2][0],
+      $match_resolution_results[5][0]
+    );
+    if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
+      $change_input = array($match_change_results[2]);
+    }
+  }
 
-  // Create an associative array to store the original width and height as integers.
-  $original_width_height = array("width" => (int)$width_height[0], "height" => (int)$width_height[1]);
+  //echo ("<pre>width_height_input: " . print_r($width_height_input, 1) . "</pre>");
+  //echo ("<pre>change_input: " . print_r($change_input, 1) . "</pre>");
 
-  $aspect_ratio = get_aspect_ratio($original_width_height['width'], $original_width_height['height']);
+  // Check input, query e.g. "800x600 50%";
+  if (count($width_height_input) > 0) {
+    // A match was found for width and height.
+    $width_height = $width_height_input;
 
-  $json_output = '{
-    "skipknowledge": true,
-    "items": [
-    {
-      "uid": "aspect_ratio",
-      "title": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '",
-      "subtitle": "Aspect ratio",
-      "arg": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '"
+    // Create an associative array to store the original width and height as integers.
+    $original_width_height = array("width" => (int)$width_height[0], "height" => (int)$width_height[1]);
+
+    // Get the aspect ratio
+    $aspect_ratio = get_aspect_ratio($original_width_height['width'], $original_width_height['height']);
+
+    $json_output = '{
+      "skipknowledge": true,
+      "items": [
+      {
+        "uid": "aspect_ratio",
+        "title": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '",
+        "subtitle": "Aspect ratio",
+        "arg": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '"
+      }';
+
+    $json_output_info = ',
+      {
+        "uid": "invalid_command",
+        "title": "Keep typing...",
+        "subtitle": "Input format: [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
+        "arg": "",
+        "autocomplete": ""
     }';
 
-  $json_output_info = ',
-    {
-      "uid": "invalid_command",
-      "title": "Keep typing...",
-      "subtitle": "Input format: [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
-      "arg": "",
-      "autocomplete": ""
-  }';
+    // A match was found for change.
+    if (count($change_input) > 0) {
+      $json_output_info = "";
+      // Get argument which specifies how the image should be resized.
+      $change = $change_input[0];
 
-  preg_match("/ +(\d+%?)/i", $argv[1], $change_input);
-  if (count($change_input) > 0) {
-    $json_output_info = "";
-    // Get the second argument, which specifies how the image should be resized.
-    $change = $change_input[1];
+      // If the argument contains a percentage sign, resize the image by a percentage.
+      if (strpos($change, "%") !== false) {
+        $change = (int)str_replace('%', '', $change);
+        $new_size = get_resized_size($original_width_height['width'], $original_width_height['height'], $change);
+      }
+      // Otherwise, resize the image to a specific height.
+      else {
+        $new_size = determine_new_height($original_width_height['width'], $original_width_height['height'], $change);
+      }
 
-    // If the second argument contains a percentage sign, resize the image by a percentage.
-    if (strpos($change, "%") !== false) {
-      $change = (int)str_replace('%', '', $change);
-      $new_size = get_resized_size($original_width_height['width'], $original_width_height['height'], $change);
-    }
-    // Otherwise, resize the image to a specific height.
-    else {
-      $new_size = determine_new_height($original_width_height['width'], $original_width_height['height'], $change);
-    }
-
-    $json_output_change = ',
-      {
+      $json_output_change = ',
+        {
           "uid": "width_and_height",
           "title": "' . $new_size["width"] . 'x' . $new_size["height"] . '",
           "subtitle": "New width and height",
           "arg": "' . $new_size["width"] . 'x' . $new_size["height"] . '"
-      },
-      {
-        "uid": "width_and_height_html",
-        "title": "width=\"' . $new_size["width"] . 'px\" height=\"' . $new_size["height"] . 'px\"",
-        "subtitle": "New width and height in HTML",
-        "arg": "width=\"' . $new_size["width"] . '\" height=\"' . $new_size["height"] . '\""
-    },
-      {
-        "uid": "width",
-        "title": "' . $new_size["width"] . '",
-        "subtitle": "New width",
-        "arg": "' . $new_size["width"] . '"
-      },
-      {
-        "uid": "height",
-        "title": "' . $new_size["height"] . '",
-        "subtitle": "New height",
-        "arg": "' . $new_size["height"] . '"
-      }';
+        },
+        {
+          "uid": "width_and_height_html",
+          "title": "width=\"' . $new_size["width"] . 'px\" height=\"' . $new_size["height"] . 'px\"",
+          "subtitle": "New width and height in HTML",
+          "arg": "width=\"' . $new_size["width"] . 'px\" height=\"' . $new_size["height"] . 'px\""
+        },
+        {
+          "uid": "width_and_height_css",
+          "title": "width: ' . $new_size["width"] . 'px; height: ' . $new_size["height"] . 'px;",
+          "subtitle": "New width and height in CSS",
+          "arg": "width: ' . $new_size["width"] . 'px;\nheight: ' . $new_size["height"] . 'px;"
+        },
+        {
+          "uid": "width",
+          "title": "' . $new_size["width"] . '",
+          "subtitle": "New width",
+          "arg": "' . $new_size["width"] . '"
+        },
+        {
+          "uid": "height",
+          "title": "' . $new_size["height"] . '",
+          "subtitle": "New height",
+          "arg": "' . $new_size["height"] . '"
+        }';
+    }
+    $json_output_change .= ']}';
   }
-  $json_output_change .= ']}';
 }
-
 echo ($json_output . $json_output_info . $json_output_change);
 
 /**
@@ -157,6 +196,7 @@ function get_resized_size($original_width, $original_height, $percent)
  */
 function get_aspect_ratio($width, $height)
 {
+  //return array(16, 9);
   // Use the gmp_gcd function to find the greatest common divisor of $width and $height
   $divisor = gmp_intval(gmp_gcd($width, $height));
 
