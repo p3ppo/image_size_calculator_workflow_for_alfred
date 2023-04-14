@@ -5,7 +5,9 @@
 //$argv[1] = '800x600';
 //$argv[1] = '800x600 50%';
 //$argv[1] = 'width: 800px; height: 600px; 50%';
+//$argv[1] = 'height: 600px; width: 800px; 50%';
 //$argv[1] = 'width="800px" height="600px" 50%';
+//$argv[1] = 'height="600px" width="800px" 50%';
 
 $json_output = '{
   "skipknowledge": true,
@@ -13,7 +15,7 @@ $json_output = '{
     {
         "uid": "invalid_command",
         "title": "Keep typing...",
-        "subtitle": "Input format: [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
+        "subtitle": "Input format: e.g. [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
         "arg": "",
         "autocomplete": ""
     }
@@ -27,28 +29,34 @@ if (isset($argv)) {
 
   // Default input, e.g. 800x600 50%
   if (preg_match("/(\d+)x(\d+)/i", $argv[1], $match_resolution_results)) {
+    // Get width and height input.
     $width_height_input = array(
       $match_resolution_results[1],
       $match_resolution_results[2]
     );
+    // Get change input.
     if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
       $change_input = array($match_change_results[1]);
     }
-  } else if (preg_match_all('/(width: *(\d+)px;)(\t|\n|\r| *)(height: *(\d+)px;)/', $argv[1], $match_resolution_results)) {
+  } else if (preg_match_all('/(width|height): *(\d+)px;/', $argv[1], $match_resolution_results)) {
     // CSS input, e.g. width: 800px; height: 600px; 50%
+    // Find which key has width and height in the matched results.
     $width_height_input = array(
-      $match_resolution_results[2][0],
-      $match_resolution_results[5][0]
+      $match_resolution_results[2][array_search('width', $match_resolution_results[1])],
+      $match_resolution_results[2][array_search('height', $match_resolution_results[1])]
     );
+    // Get change input.
     if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
       $change_input = array($match_change_results[3]);
     }
-  } else if (preg_match_all('/(width="(\d+)px")(\t|\n|\r| *)(height="(\d+)px")/', $argv[1], $match_resolution_results)) {
+  } else if (preg_match_all('/(width|height)="(\d+)px"/', $argv[1], $match_resolution_results)) {
     // HTML input, e.g. width="800px" height="600px" 50%
+    // Find which key has width and height in the matched results.
     $width_height_input = array(
-      $match_resolution_results[2][0],
-      $match_resolution_results[5][0]
+      $match_resolution_results[2][array_search('width', $match_resolution_results[1])],
+      $match_resolution_results[2][array_search('height', $match_resolution_results[1])]
     );
+    // Get change input.
     if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
       $change_input = array($match_change_results[2]);
     }
@@ -82,7 +90,7 @@ if (isset($argv)) {
       {
         "uid": "invalid_command",
         "title": "Keep typing...",
-        "subtitle": "Input format: [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
+        "subtitle": "Input format: e.g. [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
         "arg": "",
         "autocomplete": ""
     }';
@@ -196,7 +204,7 @@ function get_resized_size($original_width, $original_height, $percent)
  */
 function get_aspect_ratio($width, $height)
 {
-  //return array(16, 9);
+  return array(16, 9);
   // Use the gmp_gcd function to find the greatest common divisor of $width and $height
   $divisor = gmp_intval(gmp_gcd($width, $height));
 
