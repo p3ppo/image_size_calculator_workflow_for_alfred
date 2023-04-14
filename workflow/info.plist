@@ -48,6 +48,25 @@
 		<dict>
 			<key>config</key>
 			<dict>
+				<key>autopaste</key>
+				<true/>
+				<key>clipboardtext</key>
+				<string>{query}</string>
+				<key>ignoredynamicplaceholders</key>
+				<false/>
+				<key>transient</key>
+				<false/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.clipboard</string>
+			<key>uid</key>
+			<string>7E912A59-DC92-4EBA-B86B-423F7F570684</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
 				<key>alfredfiltersresults</key>
 				<false/>
 				<key>alfredfiltersresultsmatchmode</key>
@@ -77,11 +96,12 @@
 
 //echo (PHP_VERSION);
 
-//$argv[1] = "800x600 50%";
-preg_match("/(\d+x\d+)/i", $argv[1], $width_height_input);
-//echo ("&lt;pre&gt;" . print_r($width_height_input, 1) . "&lt;/pre&gt;");
-preg_match("/ +(\d+%?)/i", $argv[1], $change_input);
-//echo ("&lt;pre&gt;" . print_r($change_input, 1) . "&lt;/pre&gt;");
+//$argv[1] = '800x600';
+//$argv[1] = '800x600 50%';
+//$argv[1] = 'width: 800px; height: 600px; 50%';
+//$argv[1] = 'height: 600px; width: 800px; 50%';
+//$argv[1] = 'width="800px" height="600px" 50%';
+//$argv[1] = 'height="600px" width="800px" 50%';
 
 $json_output = '{
   "skipknowledge": true,
@@ -89,7 +109,7 @@ $json_output = '{
     {
         "uid": "invalid_command",
         "title": "Keep typing...",
-        "subtitle": "Input format: [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
+        "subtitle": "Input format: e.g. [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
         "arg": "",
         "autocomplete": ""
     }
@@ -97,83 +117,117 @@ $json_output = '{
 $json_output_info = "";
 $json_output_change = "";
 
-// Check input, query e.g. "800x600 150%";
-if (count($width_height_input) &gt; 0) {
-  // A match was found for width and height.
+if (isset($argv)) {
+  $width_height_input = array();
+  $change_input = array();
 
-  // Extract the width and height from the first argument by splitting it on the "x" character.
-  $width_height = $width_height_input[1];
-  $width_height = explode("x", $width_height);
+  // Default input, e.g. 800x600 50%
+  if (preg_match("/(\d+)x(\d+)/i", $argv[1], $match_resolution_results)) {
+    // Get width and height input.
+    $width_height_input = array(
+      $match_resolution_results[1],
+      $match_resolution_results[2]
+    );
+  } else if (preg_match_all('/(width|height)(: *|=")(\d+)px(;|")/', $argv[1], $match_resolution_results)) {
+    // CSS input, e.g. width: 800px; height: 600px; 50%
+    // HTML input, e.g. width="800px" height="600px" 50%
+    // Find which key has width and height in the matched results.
+    $width_height_input = array(
+      $match_resolution_results[3][array_search('width', $match_resolution_results[1])],
+      $match_resolution_results[3][array_search('height', $match_resolution_results[1])]
+    );
+  }
 
-  // Create an associative array to store the original width and height as integers.
-  $original_width_height = array("width" =&gt; (int)$width_height[0], "height" =&gt; (int)$width_height[1]);
+  // Get change input.
+  if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
+    $match_change_results = array_values(array_filter($match_change_results)); // Remove empty values and reset keys.
+    $change_input = array($match_change_results[1]);
+  }
 
-  $aspect_ratio = get_aspect_ratio($original_width_height['width'], $original_width_height['height']);
+  //echo ("&lt;pre&gt;width_height_input: " . print_r($width_height_input, 1) . "&lt;/pre&gt;");
+  //echo ("&lt;pre&gt;change_input: " . print_r($change_input, 1) . "&lt;/pre&gt;");
 
-  $json_output = '{
-    "skipknowledge": true,
-    "items": [
-    {
-      "uid": "aspect_ratio",
-      "title": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '",
-      "subtitle": "Aspect ratio",
-      "arg": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '"
+  // Check input, query e.g. "800x600 50%";
+  if (count($width_height_input) &gt; 0) {
+    // A match was found for width and height.
+    $width_height = $width_height_input;
+
+    // Create an associative array to store the original width and height as integers.
+    $original_width_height = array("width" =&gt; (int)$width_height[0], "height" =&gt; (int)$width_height[1]);
+
+    // Get the aspect ratio
+    $aspect_ratio = get_aspect_ratio($original_width_height['width'], $original_width_height['height']);
+
+    $json_output = '{
+      "skipknowledge": true,
+      "items": [
+      {
+        "uid": "aspect_ratio",
+        "title": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '",
+        "subtitle": "Aspect ratio",
+        "arg": "' . $aspect_ratio[0] . ':' . $aspect_ratio[1] . '"
+      }';
+
+    $json_output_info = ',
+      {
+        "uid": "invalid_command",
+        "title": "Keep typing...",
+        "subtitle": "Input format: e.g. [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
+        "arg": "",
+        "autocomplete": ""
     }';
 
-  $json_output_info = ',
-    {
-      "uid": "invalid_command",
-      "title": "Keep typing...",
-      "subtitle": "Input format: [width]x[height] [new width/change in percent]. E.g. 800x600 50%",
-      "arg": "",
-      "autocomplete": ""
-  }';
+    // A match was found for change.
+    if (count($change_input) &gt; 0) {
+      $json_output_info = "";
+      // Get argument which specifies how the image should be resized.
+      $change = $change_input[0];
 
-  preg_match("/ +(\d+%?)/i", $argv[1], $change_input);
-  if (count($change_input) &gt; 0) {
-    $json_output_info = "";
-    // Get the second argument, which specifies how the image should be resized.
-    $change = $change_input[1];
+      // If the argument contains a percentage sign, resize the image by a percentage.
+      if (strpos($change, "%") !== false) {
+        $change = (int)str_replace('%', '', $change);
+        $new_size = get_resized_size($original_width_height['width'], $original_width_height['height'], $change);
+      }
+      // Otherwise, resize the image to a specific height.
+      else {
+        $new_size = determine_new_height($original_width_height['width'], $original_width_height['height'], $change);
+      }
 
-    // If the second argument contains a percentage sign, resize the image by a percentage.
-    if (strpos($change, "%") !== false) {
-      $change = (int)str_replace('%', '', $change);
-      $new_size = get_resized_size($original_width_height['width'], $original_width_height['height'], $change);
-    }
-    // Otherwise, resize the image to a specific height.
-    else {
-      $new_size = determine_new_height($original_width_height['width'], $original_width_height['height'], $change);
-    }
-
-    $json_output_change = ',
-      {
+      $json_output_change = ',
+        {
           "uid": "width_and_height",
           "title": "' . $new_size["width"] . 'x' . $new_size["height"] . '",
           "subtitle": "New width and height",
           "arg": "' . $new_size["width"] . 'x' . $new_size["height"] . '"
-      },
-      {
-        "uid": "width_and_height_html",
-        "title": "width=\"' . $new_size["width"] . 'px\" height=\"' . $new_size["height"] . 'px\"",
-        "subtitle": "New width and height in HTML",
-        "arg": "width=\"' . $new_size["width"] . '\" height=\"' . $new_size["height"] . '\""
-    },
-      {
-        "uid": "width",
-        "title": "' . $new_size["width"] . '",
-        "subtitle": "New width",
-        "arg": "' . $new_size["width"] . '"
-      },
-      {
-        "uid": "height",
-        "title": "' . $new_size["height"] . '",
-        "subtitle": "New height",
-        "arg": "' . $new_size["height"] . '"
-      }';
+        },
+        {
+          "uid": "width_and_height_html",
+          "title": "width=\"' . $new_size["width"] . 'px\" height=\"' . $new_size["height"] . 'px\"",
+          "subtitle": "New width and height in HTML",
+          "arg": "width=\"' . $new_size["width"] . 'px\" height=\"' . $new_size["height"] . 'px\""
+        },
+        {
+          "uid": "width_and_height_css",
+          "title": "width: ' . $new_size["width"] . 'px; height: ' . $new_size["height"] . 'px;",
+          "subtitle": "New width and height in CSS",
+          "arg": "width: ' . $new_size["width"] . 'px;\nheight: ' . $new_size["height"] . 'px;"
+        },
+        {
+          "uid": "width",
+          "title": "' . $new_size["width"] . '",
+          "subtitle": "New width",
+          "arg": "' . $new_size["width"] . '"
+        },
+        {
+          "uid": "height",
+          "title": "' . $new_size["height"] . '",
+          "subtitle": "New height",
+          "arg": "' . $new_size["height"] . '"
+        }';
+    }
+    $json_output_change .= ']}';
   }
-  $json_output_change .= ']}';
 }
-
 echo ($json_output . $json_output_info . $json_output_change);
 
 /**
@@ -232,6 +286,7 @@ function get_resized_size($original_width, $original_height, $percent)
  */
 function get_aspect_ratio($width, $height)
 {
+  //return array(16, 9);
   // Use the gmp_gcd function to find the greatest common divisor of $width and $height
   $divisor = gmp_intval(gmp_gcd($width, $height));
 
@@ -259,25 +314,6 @@ function get_aspect_ratio($width, $height)
 			<string>alfred.workflow.input.scriptfilter</string>
 			<key>uid</key>
 			<string>CEE2DC7A-06C3-4744-8E14-0F295051B365</string>
-			<key>version</key>
-			<integer>3</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>autopaste</key>
-				<false/>
-				<key>clipboardtext</key>
-				<string>{query}</string>
-				<key>ignoredynamicplaceholders</key>
-				<false/>
-				<key>transient</key>
-				<false/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.output.clipboard</string>
-			<key>uid</key>
-			<string>7E912A59-DC92-4EBA-B86B-423F7F570684</string>
 			<key>version</key>
 			<integer>3</integer>
 		</dict>
