@@ -34,32 +34,20 @@ if (isset($argv)) {
       $match_resolution_results[1],
       $match_resolution_results[2]
     );
-    // Get change input.
-    if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
-      $change_input = array($match_change_results[1]);
-    }
-  } else if (preg_match_all('/(width|height): *(\d+)px;/', $argv[1], $match_resolution_results)) {
+  } else if (preg_match_all('/(width|height)(: *|=")(\d+)px(;|")/', $argv[1], $match_resolution_results)) {
     // CSS input, e.g. width: 800px; height: 600px; 50%
-    // Find which key has width and height in the matched results.
-    $width_height_input = array(
-      $match_resolution_results[2][array_search('width', $match_resolution_results[1])],
-      $match_resolution_results[2][array_search('height', $match_resolution_results[1])]
-    );
-    // Get change input.
-    if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
-      $change_input = array($match_change_results[3]);
-    }
-  } else if (preg_match_all('/(width|height)="(\d+)px"/', $argv[1], $match_resolution_results)) {
     // HTML input, e.g. width="800px" height="600px" 50%
     // Find which key has width and height in the matched results.
     $width_height_input = array(
-      $match_resolution_results[2][array_search('width', $match_resolution_results[1])],
-      $match_resolution_results[2][array_search('height', $match_resolution_results[1])]
+      $match_resolution_results[3][array_search('width', $match_resolution_results[1])],
+      $match_resolution_results[3][array_search('height', $match_resolution_results[1])]
     );
-    // Get change input.
-    if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
-      $change_input = array($match_change_results[2]);
-    }
+  }
+
+  // Get change input.
+  if (preg_match('/\d +(\d+%?)|" +(\d+%?)|; +(\d+%?)/', $argv[1], $match_change_results)) {
+    $match_change_results = array_values(array_filter($match_change_results)); // Remove empty values and reset keys.
+    $change_input = array($match_change_results[1]);
   }
 
   //echo ("<pre>width_height_input: " . print_r($width_height_input, 1) . "</pre>");
@@ -204,7 +192,7 @@ function get_resized_size($original_width, $original_height, $percent)
  */
 function get_aspect_ratio($width, $height)
 {
-  return array(16, 9);
+  //return array(16, 9);
   // Use the gmp_gcd function to find the greatest common divisor of $width and $height
   $divisor = gmp_intval(gmp_gcd($width, $height));
 
